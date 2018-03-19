@@ -168,7 +168,12 @@ MultirotorMixer::mix(float *outputs, unsigned space)
 	3) mix in yaw and scale if it leads to limit violation.
 	4) scale all outputs to range [idle_speed,1]
 	*/
+	
+	// Zijian's comment: actuator_control from MAVROS can be retrieved by get_control(0, 0/1/2/3)
+	//printf("%4.2f, %4.2f, %4.2f, %4.2f \n", 
+	//		(double)get_control(0, 0), (double)get_control(0, 1), (double)get_control(0, 2), (double)get_control(0, 3));
 
+	/* Zijian: disable mixing, enable individual motor thrust control
 	float		roll    = math::constrain(get_control(0, 0) * _roll_scale, -1.0f, 1.0f);
 	float		pitch   = math::constrain(get_control(0, 1) * _pitch_scale, -1.0f, 1.0f);
 	float		yaw     = math::constrain(get_control(0, 2) * _yaw_scale, -1.0f, 1.0f);
@@ -183,7 +188,7 @@ MultirotorMixer::mix(float *outputs, unsigned space)
 	float thrust_increase_factor = 1.5f;
 	float thrust_decrease_factor = 0.6f;
 
-	/* perform initial mix pass yielding unbounded outputs, ignore yaw */
+	// perform initial mix pass yielding unbounded outputs, ignore yaw
 	for (unsigned i = 0; i < _rotor_count; i++) {
 		float out = roll * _rotors[i].roll_scale +
 			    pitch * _rotors[i].pitch_scale +
@@ -191,7 +196,7 @@ MultirotorMixer::mix(float *outputs, unsigned space)
 
 		out *= _rotors[i].out_scale;
 
-		/* calculate min and max output values */
+		// calculate min and max output values
 		if (out < min_out) {
 			min_out = out;
 		}
@@ -294,13 +299,17 @@ MultirotorMixer::mix(float *outputs, unsigned space)
 
 	// Apply collective thrust reduction, the maximum for one prop
 	thrust -= thrust_reduction;
-
+*/
 	// add yaw and scale outputs to range idle_speed...1
 	for (unsigned i = 0; i < _rotor_count; i++) {
-		outputs[i] = (roll * _rotors[i].roll_scale +
-			      pitch * _rotors[i].pitch_scale) * roll_pitch_scale +
-			     yaw * _rotors[i].yaw_scale +
-			     thrust + boost;
+		// disable mixing, enable individual motor thrust control
+		//outputs[i] = (roll * _rotors[i].roll_scale +
+		//	      pitch * _rotors[i].pitch_scale) * roll_pitch_scale +
+		//	     yaw * _rotors[i].yaw_scale +
+		//	     thrust + boost;
+
+		// directly retrieve desired motors thrust from actuator_control (MAVROS)
+		outputs[i] = math::constrain(get_control(0, i), -1.0f, 1.0f);
 
 		/*
 			implement simple model for static relationship between applied motor pwm and motor thrust
@@ -355,6 +364,10 @@ MultirotorMixer::mix(float *outputs, unsigned space)
 
 	// this will force the caller of the mixer to always supply new slew rate values, otherwise no slew rate limiting will happen
 	_delta_out_max = 0.0f;
+
+	// outputs is scaled to [_idle_speed, 1], -1 < _idle_speed < 0
+	//printf("%4.2f, %4.2f, %4.2f, %4.2f \n", 
+	//		(double)outputs[0], (double)outputs[1], (double)outputs[2], (double)outputs[3]);
 
 	return _rotor_count;
 }
