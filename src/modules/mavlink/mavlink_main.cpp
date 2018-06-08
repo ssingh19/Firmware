@@ -2057,7 +2057,7 @@ Mavlink::task_main(int argc, char *argv[])
 		configure_stream("ATTITUDE_QUATERNION", -1.0f);
 		configure_stream("RC_CHANNELS", 1.0f);
 		configure_stream("SERVO_OUTPUT_RAW_0", 0.0f);
-		configure_stream("ALTITUDE", 0.0f);
+		configure_stream("ALTITUDE", 1.0f);
 		configure_stream("GPS_RAW_INT");
 		configure_stream("ADSB_VEHICLE");
 		configure_stream("COLLISION");
