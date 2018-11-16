@@ -1000,6 +1000,7 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 	math::Vector<3> rates_d_scaled = _params.rate_d.emult(pid_attenuations(_params.tpa_breakpoint_d, _params.tpa_rate_d));
 
 	/* angular rates error */
+	//PX4_INFO("r_wb: (%.3f, %.3f, %.3f)",(double)_rates_sp(0),(double)_rates_sp(1),(double)_rates_sp(2));
 	math::Vector<3> rates_err = _rates_sp - rates;
 
 	_att_control = rates_p_scaled.emult(rates_err) +
