@@ -179,6 +179,11 @@ private:
 
 	math::Matrix<3, 3>  _I;				/**< identity matrix */
 
+	math::Matrix<3,3> _J;
+
+	math::Matrix<3,3> R;
+	math::Matrix<3,3> R_prev;
+
 	math::Matrix<3, 3>	_board_rotation = {};	/**< rotation matrix for the orientation that the board is mounted */
 
 	struct {
@@ -411,6 +416,10 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 	_att_control.zero();
 
 	_I.identity();
+	_J.identity();
+	R.identity();
+	R_prev.identity();
+
 	_board_rotation.identity();
 
 	_params_handles.roll_p			= 	param_find("MC_ROLL_P");
@@ -631,6 +640,11 @@ MulticopterAttitudeControl::parameters_update()
 					 M_DEG_TO_RAD_F * _params.board_offset[1],
 					 M_DEG_TO_RAD_F * _params.board_offset[2]);
 	_board_rotation = board_rotation_offset * _board_rotation;
+
+
+	_J(0,0) = 0.0347563f;
+	_J(1,1) = 0.0458929f;
+	_J(2,2) = 0.0977f;
 }
 
 void
@@ -820,7 +834,7 @@ MulticopterAttitudeControl::control_attitude(float dt)
 
 	/* get current rotation matrix from control state quaternions */
 	math::Quaternion q_att(_v_att.q[0], _v_att.q[1], _v_att.q[2], _v_att.q[3]);
-	math::Matrix<3, 3> R = q_att.to_dcm();
+	R = q_att.to_dcm();
 
 	/* all input data is ready, run controller itself */
 
@@ -927,6 +941,7 @@ MulticopterAttitudeControl::control_attitude(float dt)
 			_rates_int(2) = 0.0f;
 		}
 	}
+
 }
 
 /*
@@ -1003,13 +1018,21 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 	//PX4_INFO("r_wb: (%.3f, %.3f, %.3f)",(double)_rates_sp(0),(double)_rates_sp(1),(double)_rates_sp(2));
 	math::Vector<3> rates_err = _rates_sp - rates;
 
+	// _att_control = rates_p_scaled.emult(rates_err) +
+	// 	       _rates_int +
+	// 	       rates_d_scaled.emult(_rates_prev - rates) / dt +
+	// 	       _params.rate_ff.emult(_rates_sp);
+
+	math::Vector<3> J_w = _J*rates;
+	math::Vector<3> om_combined = _rates_sp + rates;
+	math::Vector<3> om_J_om(om_combined(1)*J_w(2)-om_combined(2)*J_w(1), om_combined(2)*J_w(0)-om_combined(0)*J_w(2), om_combined(0)*J_w(1)-om_combined(1)*J_w(0));
 	_att_control = rates_p_scaled.emult(rates_err) +
-		       _rates_int +
-		       rates_d_scaled.emult(_rates_prev - rates) / dt +
-		       _params.rate_ff.emult(_rates_sp);
+								 rates_d_scaled.emult(rates_err-R.transposed()*R_prev*(_rates_sp_prev-_rates_prev))/dt -
+								 om_J_om*0.3f;
 
 	_rates_sp_prev = _rates_sp;
 	_rates_prev = rates;
+	R_prev = R;
 
 	/* update integral only if motors are providing enough thrust to be effective */
 	if (_thrust_sp > MIN_TAKEOFF_THRUST) {
