@@ -91,6 +91,8 @@
  */
 extern "C" __EXPORT int mc_att_control_main(int argc, char *argv[]);
 
+#define THRUST_EST_N 5.0f
+
 #define MIN_TAKEOFF_THRUST    0.2f
 #define TPA_RATE_LOWER_LIMIT 0.05f
 #define ATTITUDE_TC_DEFAULT 0.2f
@@ -185,6 +187,9 @@ private:
 	math::Matrix<3,3> R_prev;
 
 	math::Matrix<3, 3>	_board_rotation = {};	/**< rotation matrix for the orientation that the board is mounted */
+
+	float _raw_thrust_est_sum;
+	float _raw_thrust_est;
 
 	struct {
 		param_t roll_p;
@@ -419,6 +424,9 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 	_J.identity();
 	R.identity();
 	R_prev.identity();
+
+	_raw_thrust_est_sum = 9.8066f * THRUST_EST_N;
+	_raw_thrust_est = 9.8066f;
 
 	_board_rotation.identity();
 
@@ -1033,6 +1041,17 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 	_rates_sp_prev = _rates_sp;
 	_rates_prev = rates;
 	R_prev = R;
+
+
+	// Thrust controls
+
+	if (_v_control_mode.flag_control_offboard_enabled) {
+
+		// convert _thrust_sp (throttle) to raw Thrust
+		float raw_thrust_sp = (_thrust_sp/0.56) * 9.8066f;
+
+
+	}
 
 	/* update integral only if motors are providing enough thrust to be effective */
 	if (_thrust_sp > MIN_TAKEOFF_THRUST) {
