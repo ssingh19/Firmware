@@ -1104,10 +1104,19 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 	math::Vector<3> rates_d_scaled = _params.rate_d.emult(pid_attenuations(_params.tpa_breakpoint_d, _params.tpa_rate_d));
 
 
+	// PX4_INFO("pos:(%.4f, %.4f, %.4f), quat:(%.4f, %.4f, %.4f, %.4f)",
+	// 					(double)_local_pos.x,(double)_local_pos.y,(double)_local_pos.z,
+	// 					(double)_v_att.q[0], (double)_v_att.q[1], (double)_v_att.q[2], (double)_v_att.q[3]);
+
+	// PX4_INFO("vel:(%.4f, %.4f, %.4f), omb:(%.4f, %.4f, %.4f)",
+	// 					(double)_local_pos.vx,(double)_local_pos.vy,(double)_local_pos.vz,
+	// 					(double)rates(0), (double)rates(1), (double)rates(2));
+
 	// Adjust rates_sp in offboard mode
 	if (_v_control_mode.flag_control_offboard_enabled){
 		float yaw = atan2f(-R(0,1),R(0,0));
 		float pitch = asinf(R(0,2));
+		// float roll = atan2f(-R(1,2),R(2,2));
 
 		math::Vector<3> euler_rates_sp = _rates_sp;
 
@@ -1115,8 +1124,8 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 		_rates_sp(1) = -cosf(pitch)*sinf(yaw)*euler_rates_sp(0) + cosf(yaw)*euler_rates_sp(1);
 		_rates_sp(2) =  sinf(pitch)*euler_rates_sp(0) + euler_rates_sp(2);
 
-		PX4_INFO("(%.4f, %.4f: %.4f, %.4f, %.4f)", (double)pitch, (double)yaw,
-							(double)euler_rates_sp(0), (double)euler_rates_sp(1), (double)euler_rates_sp(2));
+		// PX4_INFO("(%.4f, %.4f, %.4f: %.4f, %.4f, %.4f)", (double)roll, (double)pitch, (double)yaw,
+		// 					(double)_rates_sp(0), (double)_rates_sp(1), (double)_rates_sp(2));
 
 	}
 
@@ -1154,8 +1163,8 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 		_raw_thrust_err += (raw_thrust_sp - _raw_thrust_est)*dt;
 
 		// adjust throttle to account for errors
-		_thrust_sp = _thrust_sp_prev + 0.005f*(raw_thrust_sp - _raw_thrust_est) +
-																	 0.001f*_raw_thrust_err;
+		_thrust_sp = _thrust_sp + 0.005f*(raw_thrust_sp - _raw_thrust_est) +
+															0.0f*_raw_thrust_err;
 	}
 
 	/* update integral only if motors are providing enough thrust to be effective */
