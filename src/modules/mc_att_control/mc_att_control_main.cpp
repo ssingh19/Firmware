@@ -1163,7 +1163,7 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 		_raw_thrust_err += (raw_thrust_sp - _raw_thrust_est)*dt;
 
 		// adjust throttle to account for errors
-		_thrust_sp = _thrust_sp + 0.005f*(raw_thrust_sp - _raw_thrust_est) +
+		_thrust_sp = _thrust_sp + 0.00f*(raw_thrust_sp - _raw_thrust_est) +
 															0.0f*_raw_thrust_err;
 	}
 
