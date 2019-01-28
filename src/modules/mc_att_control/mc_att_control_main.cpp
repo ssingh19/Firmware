@@ -92,7 +92,7 @@
  */
 extern "C" __EXPORT int mc_att_control_main(int argc, char *argv[]);
 
-#define THRUST_EST_N 10.0f
+#define THRUST_EST_N 2.0f
 
 #define MIN_TAKEOFF_THRUST    0.2f
 #define TPA_RATE_LOWER_LIMIT 0.05f
@@ -200,7 +200,7 @@ private:
 	// For thrust control
 	float _thrust_sp_prev;
 	float _raw_thrust_sp;
-	float _raw_thrust_err;
+	float _raw_thrust_err_int;
 	float _alpha;
 	bool offboard_started;
 
@@ -451,7 +451,7 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 
 	_thrust_sp_prev = 0.56f;
 	_raw_thrust_sp = 9.8066f;
-	_raw_thrust_err = 0.0f;
+	_raw_thrust_err_int = 0.0f;
 	_alpha = 0.56f;
 	offboard_started = false;
 
@@ -1045,7 +1045,8 @@ MulticopterAttitudeControl::update_thrust_est(float dt)
 
 	}
 
-	math::Vector<3> acc = (_vel - _vel_prev) * (1.0f/dt);
+	// math::Vector<3> acc = (_vel - _vel_prev) * (1.0f/dt);
+	math::Vector<3> acc(_local_pos.ax, _local_pos.ay, _local_pos.az);
 	_vel_prev = _vel;
 
 	acc(2) += -9.8066f;
@@ -1130,17 +1131,17 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 	/* angular rates error */
 	math::Vector<3> rates_err = _rates_sp - rates;
 
-	// _att_control = rates_p_scaled.emult(rates_err) +
-	// 	       _rates_int +
-	// 	       rates_d_scaled.emult(_rates_prev - rates) / dt +
-	// 	       _params.rate_ff.emult(_rates_sp);
-
-	math::Vector<3> J_w = _J*rates;
-	math::Vector<3> om_combined = _rates_sp + rates;
-	math::Vector<3> om_J_om(om_combined(1)*J_w(2)-om_combined(2)*J_w(1), om_combined(2)*J_w(0)-om_combined(0)*J_w(2), om_combined(0)*J_w(1)-om_combined(1)*J_w(0));
 	_att_control = rates_p_scaled.emult(rates_err) +
-								 rates_d_scaled.emult(rates_err-R.transposed()*R_prev*(_rates_sp_prev-_rates_prev))/dt +
-								 om_J_om*0.3f;
+		       _rates_int +
+		       rates_d_scaled.emult(rates_err-R.transposed()*R_prev*(_rates_sp_prev-_rates_prev)) / dt +
+		       _params.rate_ff.emult(_rates_sp);
+
+	// math::Vector<3> J_w = _J*rates;
+	// math::Vector<3> om_combined = _rates_sp + rates;
+	// math::Vector<3> om_J_om(om_combined(1)*J_w(2)-om_combined(2)*J_w(1), om_combined(2)*J_w(0)-om_combined(0)*J_w(2), om_combined(0)*J_w(1)-om_combined(1)*J_w(0));
+	// _att_control = rates_p_scaled.emult(rates_err) +
+	// 							 rates_d_scaled.emult(rates_err-R.transposed()*R_prev*(_rates_sp_prev-_rates_prev))/dt +
+	// 							 om_J_om*0.3f;
 
 	_rates_sp_prev = _rates_sp;
 	_rates_prev = rates;
@@ -1151,7 +1152,7 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 	if (_v_control_mode.flag_control_offboard_enabled) {
 
 		if (!offboard_started){
-			_raw_thrust_err = 0.0f; //previous thrust error
+			_raw_thrust_err_int = 0.0f; //previous thrust error
 			offboard_started = true;
 		}
 
@@ -1159,13 +1160,16 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 		_raw_thrust_sp = (_thrust_sp/0.56f) * 9.8066f;
 
 		// Update thrust err deriv
-		float raw_thrust_err_deriv = ((_raw_thrust_sp - _raw_thrust_est) - _raw_thrust_err)/dt;
-		_raw_thrust_err = (_raw_thrust_sp - _raw_thrust_est);
+		// float raw_thrust_err_deriv = ((_raw_thrust_sp - _raw_thrust_est) - _raw_thrust_err)/dt;
+		// _raw_thrust_err = (_raw_thrust_sp - _raw_thrust_est);
+
+		float raw_thrust_err = _raw_thrust_sp - _raw_thrust_est;
+		_raw_thrust_err_int += raw_thrust_err * dt;
 
 		// adjust throttle to account for errors
 		// float thrust_ffwd = _alpha * (_raw_thrust_sp/9.8066f);
 		float thrust_ffwd = _thrust_sp_prev;
-		_thrust_sp = thrust_ffwd + 0.005f* _raw_thrust_err + 0.00f*raw_thrust_err_deriv;
+		_thrust_sp = thrust_ffwd + 0.01f* raw_thrust_err + 0.004f*_raw_thrust_err_int;
 	}
 
 	/* update integral only if motors are providing enough thrust to be effective */
@@ -1313,7 +1317,7 @@ MulticopterAttitudeControl::task_main()
 
 			if (!_v_control_mode.flag_control_offboard_enabled && offboard_started) {
 				offboard_started = false;
-				_raw_thrust_err = 0.0f;
+				_raw_thrust_err_int = 0.0f;
 			}
 
 
