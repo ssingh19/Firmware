@@ -199,9 +199,7 @@ private:
 
 	// For thrust control
 	float _thrust_sp_prev;
-	float _raw_thrust_sp;
 	float _raw_thrust_err_int;
-	float _alpha;
 	bool offboard_started;
 
 	struct {
@@ -450,9 +448,7 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 	_vel_prev.zero();
 
 	_thrust_sp_prev = 0.56f;
-	_raw_thrust_sp = 9.8066f;
 	_raw_thrust_err_int = 0.0f;
-	_alpha = 0.56f;
 	offboard_started = false;
 
 
@@ -1157,19 +1153,12 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 		}
 
 		// Update raw thrust sp
-		_raw_thrust_sp = (_thrust_sp/0.56f) * 9.8066f;
+		float raw_thrust_sp = (_thrust_sp/0.56f) * 9.8066f;
 
-		// Update thrust err deriv
-		// float raw_thrust_err_deriv = ((_raw_thrust_sp - _raw_thrust_est) - _raw_thrust_err)/dt;
-		// _raw_thrust_err = (_raw_thrust_sp - _raw_thrust_est);
-
-		float raw_thrust_err = _raw_thrust_sp - _raw_thrust_est;
+		float raw_thrust_err = raw_thrust_sp - _raw_thrust_est;
 		_raw_thrust_err_int += raw_thrust_err * dt;
 
-		// adjust throttle to account for errors
-		// float thrust_ffwd = _alpha * (_raw_thrust_sp/9.8066f);
-		float thrust_ffwd = _thrust_sp_prev;
-		_thrust_sp = thrust_ffwd + 0.01f* raw_thrust_err + 0.004f*_raw_thrust_err_int;
+		_thrust_sp = _thrust_sp_prev + 0.01f* raw_thrust_err + 0.004f*_raw_thrust_err_int;
 	}
 
 	/* update integral only if motors are providing enough thrust to be effective */
