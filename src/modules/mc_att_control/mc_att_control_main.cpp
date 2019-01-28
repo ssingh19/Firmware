@@ -92,7 +92,7 @@
  */
 extern "C" __EXPORT int mc_att_control_main(int argc, char *argv[]);
 
-#define THRUST_EST_N 5.0f
+#define THRUST_EST_N 10.0f
 
 #define MIN_TAKEOFF_THRUST    0.2f
 #define TPA_RATE_LOWER_LIMIT 0.05f
@@ -180,7 +180,6 @@ private:
 	math::Vector<3>		_rates_sp;		/**< angular rates setpoint */
 	math::Vector<3>		_rates_int;		/**< angular rates integral error */
 	float				_thrust_sp;		/**< thrust setpoint */
-	float 			_thrust_sp_prev;
 	math::Vector<3>		_att_control;	/**< attitude control vector */
 
 	math::Matrix<3, 3>  _I;				/**< identity matrix */
@@ -192,13 +191,17 @@ private:
 
 	math::Matrix<3, 3>	_board_rotation = {};	/**< rotation matrix for the orientation that the board is mounted */
 
+	// For thrust estimation
 	float _raw_thrust_est_sum;
 	float _raw_thrust_est;
-
 	math::Vector<3> _vel;
 	math::Vector<3> _vel_prev;			/**< velocity on previous step */
 
+	// For thrust control
+	float _thrust_sp_prev;
+	float _raw_thrust_sp;
 	float _raw_thrust_err;
+	float _alpha;
 	bool offboard_started;
 
 	struct {
@@ -434,7 +437,6 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 	_rates_sp_prev.zero();
 	_rates_int.zero();
 	_thrust_sp = 0.0f;
-	_thrust_sp_prev = 0.0f;
 	_att_control.zero();
 
 	_I.identity();
@@ -444,11 +446,15 @@ MulticopterAttitudeControl::MulticopterAttitudeControl() :
 
 	_raw_thrust_est_sum = 9.8066f * THRUST_EST_N;
 	_raw_thrust_est = 9.8066f;
-	_raw_thrust_err = 0.0f;
-	offboard_started = false;
-
 	_vel.zero();
 	_vel_prev.zero();
+
+	_thrust_sp_prev = 0.56f;
+	_raw_thrust_sp = 9.8066f;
+	_raw_thrust_err = 0.0f;
+	_alpha = 0.56f;
+	offboard_started = false;
+
 
 	_board_rotation.identity();
 
@@ -1104,14 +1110,6 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 	math::Vector<3> rates_d_scaled = _params.rate_d.emult(pid_attenuations(_params.tpa_breakpoint_d, _params.tpa_rate_d));
 
 
-	// PX4_INFO("pos:(%.4f, %.4f, %.4f), quat:(%.4f, %.4f, %.4f, %.4f)",
-	// 					(double)_local_pos.x,(double)_local_pos.y,(double)_local_pos.z,
-	// 					(double)_v_att.q[0], (double)_v_att.q[1], (double)_v_att.q[2], (double)_v_att.q[3]);
-
-	// PX4_INFO("vel:(%.4f, %.4f, %.4f), omb:(%.4f, %.4f, %.4f)",
-	// 					(double)_local_pos.vx,(double)_local_pos.vy,(double)_local_pos.vz,
-	// 					(double)rates(0), (double)rates(1), (double)rates(2));
-
 	// Adjust rates_sp in offboard mode
 	if (_v_control_mode.flag_control_offboard_enabled){
 		float yaw = atan2f(-R(0,1),R(0,0));
@@ -1153,18 +1151,21 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 	if (_v_control_mode.flag_control_offboard_enabled) {
 
 		if (!offboard_started){
-			_raw_thrust_err = 0.0f; //reset integral
+			_raw_thrust_err = 0.0f; //previous thrust error
 			offboard_started = true;
 		}
 
-		// convert _thrust_sp (throttle) to raw Thrust
-		float raw_thrust_sp = (_thrust_sp/0.56f) * 9.8066f;
+		// Update raw thrust sp
+		_raw_thrust_sp = (_thrust_sp/0.56f) * 9.8066f;
 
-		_raw_thrust_err += (raw_thrust_sp - _raw_thrust_est)*dt;
+		// Update thrust err deriv
+		float raw_thrust_err_deriv = ((_raw_thrust_sp - _raw_thrust_est) - _raw_thrust_err)/dt;
+		_raw_thrust_err = (_raw_thrust_sp - _raw_thrust_est);
 
 		// adjust throttle to account for errors
-		_thrust_sp = _thrust_sp + 0.00f*(raw_thrust_sp - _raw_thrust_est) +
-															0.0f*_raw_thrust_err;
+		// float thrust_ffwd = _alpha * (_raw_thrust_sp/9.8066f);
+		float thrust_ffwd = _thrust_sp_prev;
+		_thrust_sp = thrust_ffwd + 0.005f* _raw_thrust_err + 0.00f*raw_thrust_err_deriv;
 	}
 
 	/* update integral only if motors are providing enough thrust to be effective */
@@ -1409,6 +1410,8 @@ MulticopterAttitudeControl::task_main()
 				_actuators.timestamp = hrt_absolute_time();
 				_actuators.timestamp_sample = _sensor_gyro.timestamp;
 
+				_thrust_sp_prev = _thrust_sp;
+
 				/* scale effort by battery status */
 				if (_params.bat_scale_en && _battery_status.scale > 0.0f) {
 					for (int i = 0; i < 4; i++) {
@@ -1440,10 +1443,6 @@ MulticopterAttitudeControl::task_main()
 				} else {
 					_controller_status_pub = orb_advertise(ORB_ID(mc_att_ctrl_status), &_controller_status);
 				}
-
-
-				// update thrust_sp
-				_thrust_sp_prev = _thrust_sp;
 
 			}
 
