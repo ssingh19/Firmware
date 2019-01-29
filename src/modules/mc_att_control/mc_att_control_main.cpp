@@ -1031,18 +1031,10 @@ MulticopterAttitudeControl::update_thrust_est(float dt)
 		_vel(1) = _local_pos.vy;
 		_vel(2) = _local_pos.vz;
 
-		// if (!_run_alt_control) {
-		// 	/* set velocity to the derivative of position
-		// 	 * because it has less bias but blend it in across the landing speed range*/
-		// 	float weighting = fminf(fabsf(_vel_sp(2)) / _params.land_speed, 1.0f);
-		// 	_vel(2) = _z_derivative * weighting + _vel(2) * (1.0f - weighting);
-		//
-		// }
-
 	}
 
-	// math::Vector<3> acc = (_vel - _vel_prev) * (1.0f/dt);
-	math::Vector<3> acc(_local_pos.ax, _local_pos.ay, _local_pos.az);
+	math::Vector<3> acc = (_vel - _vel_prev) * (1.0f/dt);
+	// math::Vector<3> acc(_local_pos.ax, _local_pos.ay, _local_pos.az);
 	_vel_prev = _vel;
 
 	acc(2) += -9.8066f;
@@ -1158,7 +1150,7 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 		float raw_thrust_err = raw_thrust_sp - _raw_thrust_est;
 		_raw_thrust_err_int += raw_thrust_err * dt;
 
-		_thrust_sp = _thrust_sp_prev + 0.01f* raw_thrust_err + 0.01f*_raw_thrust_err_int;
+		_thrust_sp = _thrust_sp_prev + 0.008f* raw_thrust_err + 0.006f*_raw_thrust_err_int;
 	}
 
 	/* update integral only if motors are providing enough thrust to be effective */
