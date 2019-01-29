@@ -92,7 +92,7 @@
  */
 extern "C" __EXPORT int mc_att_control_main(int argc, char *argv[]);
 
-#define THRUST_EST_N 5.0f
+#define THRUST_EST_N 2.0f
 
 #define MIN_TAKEOFF_THRUST    0.2f
 #define TPA_RATE_LOWER_LIMIT 0.05f
@@ -1041,8 +1041,8 @@ MulticopterAttitudeControl::update_thrust_est(float dt)
 
 	}
 
-	math::Vector<3> acc = (_vel - _vel_prev) * (1.0f/dt);
-	// math::Vector<3> acc(_local_pos.ax, _local_pos.ay, _local_pos.az);
+	// math::Vector<3> acc = (_vel - _vel_prev) * (1.0f/dt);
+	math::Vector<3> acc(_local_pos.ax, _local_pos.ay, _local_pos.az);
 	_vel_prev = _vel;
 
 	acc(2) += -9.8066f;
@@ -1158,7 +1158,7 @@ MulticopterAttitudeControl::control_attitude_rates(float dt)
 		float raw_thrust_err = raw_thrust_sp - _raw_thrust_est;
 		_raw_thrust_err_int += raw_thrust_err * dt;
 
-		_thrust_sp = _thrust_sp_prev + 0.006f* raw_thrust_err + 0.002f*_raw_thrust_err_int;
+		_thrust_sp = _thrust_sp_prev + 0.01f* raw_thrust_err + 0.01f*_raw_thrust_err_int;
 	}
 
 	/* update integral only if motors are providing enough thrust to be effective */
